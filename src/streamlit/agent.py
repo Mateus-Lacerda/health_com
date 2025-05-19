@@ -89,9 +89,8 @@ def agent_chat(access_level, category, query):
             )
             output_placeholder.markdown(result)
 
-        status.update(label="✅ Review Ready!",
+        status.update(label="✅ **Os agentes terminaram!**",
                       state="complete", expanded=False)
 
-    # st.subheader("Here is your Trip Plan", anchor=False, divider="rainbow")
-    st.subheader("Here is your Review", anchor=False, divider="rainbow")
+    st.subheader("Aqui está sua resposta", anchor=False, divider="rainbow")
     st.markdown(result)
