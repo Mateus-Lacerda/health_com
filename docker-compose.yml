@@ -1,0 +1,126 @@
+x-environment: &env
+  BASE_API_URL: http://api:5000
+  DB_NAME: healthcom
+  ELASTIC_PASSWORD: changeme
+  ELASTIC_USER: elastic
+  ES_HOST: es01
+  ES_PORT: 9200
+  MONGO_URI: mongodb://mongo:27017
+  PYTHONPATH: /app
+  HOST: 0.0.0.0
+  PORT:  5000
+  RELOAD: true
+  OPENAI_API_KEY: ${OPENAI_API_KEY}
+
+networks:
+  healthcom:
+    driver: bridge
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./src/api:/app/src/api
+      - ./src/mongo:/app/src/mongo
+      - ./src/elastic:/app/src/elastic
+      - ./src/schemas:/app/src/schemas
+    ports:
+      - "5000:5000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    environment:
+      <<: *env
+    depends_on:
+      mongo:
+        condition: service_healthy
+      es01:
+        condition: service_healthy
+    networks:
+      - healthcom
+    command: uv run src/api/run.py
+
+  streamlit:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./src/streamlit:/app/src/streamlit
+      - ./src/crew:/app/src/crew
+      - ./src/schemas:/app/src/schemas
+    ports:
+      - "8501:8501"
+    environment:
+      <<: *env
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - healthcom
+    command: uv run streamlit run src/streamlit/app.py --server.port 8501 --server.address 0.0.0.0
+
+  mongo:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+    environment:
+      <<: *env
+    command: ["mongod", "--quiet", "--logpath", "/dev/null"]
+    healthcheck:
+      test: mongosh --eval "db.adminCommand('ping')"
+      interval: 5s
+      timeout: 30s
+      start_period: 0s
+      start_interval: 1s
+      retries: 30
+    networks:
+      - healthcom
+
+  es01:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.17.1
+    command: >
+      /bin/bash -c "
+        elasticsearch-plugin install --batch analysis-icu;
+        chown -R elasticsearch:elasticsearch /usr/share/elasticsearch/data;
+        /usr/local/bin/init.sh & /usr/local/bin/docker-entrypoint.sh elasticsearch
+      "
+    labels:
+      co.elastic.logs/module: elasticsearch
+    volumes:
+      - ./elasticsearch/init.sh:/usr/local/bin/init.sh
+      - esdata01:/usr/share/elasticsearch/data
+    ports:
+      - 9200:9200
+    environment:
+      - node.name=es01
+      - cluster.name=docker-cluster
+      - discovery.type=single-node
+      - ELASTIC_PASSWORD=changeme
+      - bootstrap.memory_lock=true
+      - xpack.license.self_generated.type=basic
+      - xpack.security.enabled=false
+      - xpack.security.enrollment.enabled=false
+    mem_limit: 2147483648
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -X GET http://localhost:9200/_cluster/health?pretty | grep -q '\"status\" : \"green\"'",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+    networks:
+      - healthcom
+
+volumes:
+  certs:
+  esdata01:
