@@ -38,9 +38,10 @@ O sistema é composto por:
 flowchart TB
   U[Usuário] --> UI[Streamlit UI]
   UI --> API[API FastAPI]
-  API --> DB[MongoDB (PDFs)]
-  API --> ES[Elasticsearch (indexação)]
-  ES --> Crew[CrewAI (multiagentes)]
+  API --> DB[MongoDB]
+  API --> ES[Elasticsearch]
+  Crew["CrewAI (multiagentes)"] --> ES
+  UI --> Crew
 ```
 
 
@@ -69,15 +70,16 @@ flowchart TB
    ```
 
 2. Instale as dependências:
-    2.1 Com `pip`:
+ 
+    2.1. Com `pip`:
     ```bash python -m venv .venv
     source .venv/bin/activate
     pip install -r requirements.txt
     ```
-    2.2 Com `uv`:
+    2.2. Com `uv`:
     ```bash
     uv sync
-
+    ```
 
 ## Como executar o projeto localmente
 
