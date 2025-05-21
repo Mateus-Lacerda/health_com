@@ -72,7 +72,8 @@ flowchart TB
 2. Instale as dependências:
  
     2.1. Com `pip`:
-    ```bash python -m venv .venv
+    ```bash
+    python -m venv .venv
     source .venv/bin/activate
     pip install -r requirements.txt
     ```
