@@ -148,14 +148,7 @@ graph TD
     Conversational -->|Apresenta| Expert
     Expert -->|Valida e recomenda| Response
     Response -->|Exibe documentos| User
-    
-    style Manager fill:#4A90E2
-    style Researcher fill:#7ED321
-    style Conversational fill:#F5A623
-    style Expert fill:#BD10E0
-    style User fill:#50E3C2
-    style Response fill:#50E3C2
-    style ES fill:#B8E986
+
 ```
 
 ### Detalhes dos Agentes
