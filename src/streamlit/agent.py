@@ -2,10 +2,13 @@
 
 import re
 import sys
+import requests
 
 import streamlit as st
 
 from src.crew.crew import create_crew
+
+BASE_API_URL = st.session_state.get("BASE_API_URL", "http://localhost:5000")
 
 
 class StreamToExpander:
@@ -72,6 +75,79 @@ class StreamToExpander:
             self.buffer = []
 
 
+def extract_and_display_documents(response_text):
+    """
+    Extrai os documentos citados na resposta e exibe um indicador visual.
+    Procura por tags [FONTE: nome_do_documento]
+    """
+    import os
+    
+    # Converter CrewOutput para string se necessário
+    if not isinstance(response_text, str):
+        response_text = str(response_text)
+    
+    # Extrair todas as referências de fontes
+    fonte_pattern = r'\[FONTE:\s*([^\]]+)\]'
+    fontes = re.findall(fonte_pattern, response_text, re.IGNORECASE)
+    
+    if not fontes:
+        return
+    
+    # Remover duplicatas mantendo ordem
+    fontes_unicas = []
+    seen = set()
+    for fonte in fontes:
+        fonte_limpa = fonte.strip()
+        if fonte_limpa not in seen:
+            fontes_unicas.append(fonte_limpa)
+            seen.add(fonte_limpa)
+    
+    st.subheader("📚 Documentos Utilizados", divider="orange")
+    
+    # Buscar detalhes dos documentos
+    BASE_API_URL = os.getenv("BASE_API_URL", "http://localhost:5000")
+    
+    try:
+        # Buscar lista de todos os documentos
+        access_level = st.session_state.get("access_level", 0)
+        response = requests.get(
+            f"{BASE_API_URL}/api/v1/document/list",
+            params={"access_level": access_level}
+        )
+        
+        if response.status_code == 200:
+            todos_docs = response.json().get("documents", [])
+            
+            # Criar mapa nome -> documento
+            docs_map = {doc.get("filename", ""): doc for doc in todos_docs}
+            
+            # Exibir documentos encontrados
+            cols = st.columns(min(3, len(fontes_unicas)))
+            
+            for idx, fonte in enumerate(fontes_unicas):
+                col = cols[idx % len(cols)]
+                
+                if fonte in docs_map:
+                    doc = docs_map[fonte]
+                    with col:
+                        with st.container(border=True):
+                            st.markdown(f"**📄 {doc.get('filename', fonte)}**")
+                            st.caption(f"Categoria: {doc.get('category', 'N/A')}")
+                            st.caption(f"Enviado por: {doc.get('uploaded_by', 'N/A')}")
+                            
+                            # Botão para visualizar
+                            if st.button(f"👁️ Ver", key=f"view_doc_{doc.get('id')}"):
+                                st.session_state.selected_doc = doc.get("id")
+                                st.session_state.view_mode = "markdown"
+                else:
+                    with col:
+                        with st.container(border=True):
+                            st.markdown(f"**📄 {fonte}**")
+                            st.caption("Documento não encontrado no sistema")
+    except Exception as e:
+        st.warning(f"Erro ao exibir documentos: {str(e)}")
+
+
 def agent_chat(access_level, category, query):
     """Função para o chat com os agents"""
     st.subheader("Chat com os Agents")
@@ -87,10 +163,15 @@ def agent_chat(access_level, category, query):
             result = health_com_crew.kickoff(
                 inputs={"query": query}
             )
-            output_placeholder.markdown(result)
+            # Converter CrewOutput para string
+            result_str = str(result)
+            output_placeholder.markdown(result_str)
 
         status.update(label="✅ **Os agentes terminaram!**",
                       state="complete", expanded=False)
 
     st.subheader("Aqui está sua resposta", anchor=False, divider="rainbow")
-    st.markdown(result)
+    st.markdown(result_str)
+    
+    # Extrair e exibir documentos usados
+    extract_and_display_documents(result_str)

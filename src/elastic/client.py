@@ -62,6 +62,5 @@ class ElasticsearchConnection:
                         "data_upload": {"type": "date"},
                     }
                 }
-            },
-            ignore=400,
+            }
         )

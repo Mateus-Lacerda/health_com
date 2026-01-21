@@ -3,7 +3,7 @@
 from datetime import datetime
 
 from bson.objectid import ObjectId
-from fastapi import HTTPException, Response
+from fastapi import HTTPException
 from fastapi.routing import APIRouter
 
 from src.mongo.client import MongoDBClient
@@ -37,9 +37,8 @@ async def add_user(user: NewUserSchema):
         raise HTTPException(status_code=400, detail="Usuário já existe")
 
     try:
-        user.access_level = user.access_level.value
-        user_dict = user.dict()
-        user_dict["created_at"] = datetime.utcnow()
+        user_dict = user.as_dict()
+        user_dict["created_at"] = datetime.now()
         result = user_collection.insert_one(user_dict)
         return {"id": str(result.inserted_id)}
     except Exception as e:
@@ -88,8 +87,8 @@ async def update_user(user_id: str, user_update: UserUpdateSchema):
     user_collection = db["users"]
 
     try:
-        user_update_dict = user_update.dict(exclude_unset=True)
-        user_update_dict["updated_at"] = datetime.utcnow()
+        user_update_dict = user_update.model_dump(exclude_unset=True)
+        user_update_dict["updated_at"] = datetime.now()
         result = user_collection.update_one(
             {"_id": ObjectId(user_id)},
             {"$set": user_update_dict},

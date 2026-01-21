@@ -6,6 +6,7 @@ import streamlit as st
 
 from src.schemas.user import AcessLevel
 from src.streamlit.agent import agent_chat
+from src.streamlit.documents import view_documents
 
 BASE_API_URL = os.getenv("BASE_API_URL", "http://localhost:5000")
 
@@ -207,7 +208,7 @@ def main_page():
 
     st.sidebar.title("Navegação")
     page = st.sidebar.radio("Ir para", [
-                            "Início", "Gerenciamento de Usuários", "Chat com Agentes", "Enviar Arquivos", "Sair"])
+                            "Início", "Gerenciamento de Usuários", "Chat com Agentes", "Enviar Arquivos", "Visualizar Documentos", "Sair"])
 
     if page == "Início":
         st.title("Bem-vindo ao HealthCom!")
@@ -235,6 +236,8 @@ def main_page():
                            query)
     elif page == "Enviar Arquivos":
         upload_files()
+    elif page == "Visualizar Documentos":
+        view_documents()
     elif page == "Sair":
         logout()
 

@@ -55,9 +55,7 @@ flowchart TB
 - MongoDB
 - Elasticsearch
 - CrewAI
-- Pydantic
-- Langflow (opcional para integração com WhatsApp)
-- docling (conversão de PDF)
+- pymupdf4llm
 
 ---
 
@@ -126,6 +124,57 @@ O sistema utiliza CrewAI para coordenar diferentes agentes, cada um com um papel
 - Pesquisador Acadêmico PhD
 - Brigadeiro Médico da Aeronáutica
 - Apresentador de Televisão Aposentado
+
+### Diagrama de Fluxo dos Agentes
+
+```mermaid
+graph TD
+    User["Usuário<br/>(Faz uma pergunta)"]
+    Manager["Gerente de Projetos<br/>Kévio"]
+    Researcher["Pesquisador PhD<br/>(Busca documentos)"]
+    Conversational["Apresentador<br/>Manoel Gomes"]
+    Expert["Brigadeiro Médico<br/>Alessandro Silva"]
+    
+    ES["Elasticsearch<br/>(Índice de documentos)"]
+    Response["Resposta Final<br/>(Com fontes citadas)"]
+    
+    User -->|Query| Manager
+    Manager -->|Orquestra| Researcher
+    Manager -->|Orquestra| Conversational
+    Manager -->|Orquestra| Expert
+    
+    Researcher -->|Search| ES
+    ES -->|Retorna docs| Conversational
+    Conversational -->|Apresenta| Expert
+    Expert -->|Valida e recomenda| Response
+    Response -->|Exibe documentos| User
+    
+    style Manager fill:#4A90E2
+    style Researcher fill:#7ED321
+    style Conversational fill:#F5A623
+    style Expert fill:#BD10E0
+    style User fill:#50E3C2
+    style Response fill:#50E3C2
+    style ES fill:#B8E986
+```
+
+### Detalhes dos Agentes
+
+| Agente | Papel | Responsabilidade |
+|--------|-------|-------------------|
+| **Gerente** (Kévio) | Coordenador | Orquestra a crew e garante que todos os agentes trabalhem em harmonia |
+| **Pesquisador** (PhD) | Busca | Monta queries otimizadas para o Elasticsearch e recupera documentos relevantes |
+| **Apresentador** (Manoel Gomes) | Comunicação | Lê os trechos dos documentos e apresenta de forma clara e expositiva, citando as fontes |
+| **Perito** (Brigadeiro) | Validação | Responde dúvidas específicas, valida informações e recomenda quando necessário consultar especialistas |
+
+### Fluxo de Execução
+
+1. **Input**: Usuário faz uma pergunta via Streamlit
+2. **Manager**: Recebe a pergunta e coordena os agentes (Processo Hierárquico)
+3. **Researcher**: Busca documentos relevantes no Elasticsearch
+4. **Conversational**: Extrai trechos e apresenta de forma clara (com tags `[FONTE: documento]`)
+5. **Expert**: Valida a resposta e adiciona recomendações de segurança
+6. **Output**: Resposta final com indicador visual dos documentos utilizados
 
 ---
 

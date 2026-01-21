@@ -4,13 +4,13 @@ import os
 from datetime import datetime
 
 from bson.objectid import ObjectId
-from docling.document_converter import DocumentConverter
 from fastapi import File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from fastapi.routing import APIRouter
+from pymupdf4llm import to_markdown
 
-from src.mongo.client import MongoDBClient
 from src.elastic.client import ElasticsearchConnection
+from src.mongo.client import MongoDBClient
 
 document_router = APIRouter()
 
@@ -20,8 +20,6 @@ ES_HOST = "http://localhost:9200"
 mongo_client = MongoDBClient()
 
 es = ElasticsearchConnection().es
-
-converter = DocumentConverter()
 
 
 @document_router.post("/upload")
@@ -33,6 +31,9 @@ async def upload_pdf(
 ):
     fs = mongo_client.fs
 
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Nenhum arquivo enviado")
+
     if not file.filename.endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Apenas PDFs são permitidos")
 
@@ -42,8 +43,7 @@ async def upload_pdf(
         temp_file.write(await file.read())
 
     try:
-        result = converter.convert(temp_path)
-        extracted_text = result.document.export_to_markdown()
+        result = to_markdown(temp_path)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao processar PDF: {str(e)}")
 
@@ -56,7 +56,7 @@ async def upload_pdf(
                     "category": category,
                     "access_level": access_level,
                     "uploaded_by": user_id,
-                    "data_upload": datetime.utcnow(),
+                    "data_upload": datetime.now(),
                 },
             )
     finally:
@@ -68,11 +68,11 @@ async def upload_pdf(
             id=str(file_id),
             body={
                 "filename": file.filename,
-                "content": extracted_text,
+                "content": result,
                 "category": category,
                 "access_level": access_level,
                 "uploaded_by": user_id,
-                "data_upload": datetime.utcnow().isoformat(),
+                "data_upload": datetime.now().isoformat(),
             },
         )
     except Exception as e:
@@ -85,15 +85,15 @@ async def upload_pdf(
 
 
 @document_router.get("/download/{file_id}")
-async def download_pdf(
-    file_id: str, user_access_level: int
-):
+async def download_pdf(file_id: str, user_access_level: int):
     try:
         fs = mongo_client.fs
 
         file = fs.find_one({"_id": ObjectId(file_id)})
-        if not file:
-            raise HTTPException(status_code=404, detail="Arquivo não encontrado")
+        if not file or not file.metadata:
+            raise HTTPException(
+                status_code=404, detail="Arquivo não encontrado ou inválido"
+            )
         if file.metadata["access_level"] > user_access_level:
             raise HTTPException(status_code=403, detail="Acesso negado")
 
@@ -108,7 +108,7 @@ async def download_pdf(
 
 @document_router.get("/search")
 async def search_documents(
-    query: str, category: str = None, user_access_level: int = 3
+    query: str, category: str | None = None, user_access_level: int = 3
 ):
     es_query = {
         "query": {
@@ -126,13 +126,64 @@ async def search_documents(
         hits = result["hits"]["hits"]
         response = [
             {
-                "id": hit["_id"], "content": hit["_source"]["content"]
+                "id": hit["_id"],
+                "filename": hit["_source"].get("filename", "Sem nome"),
+                "content": hit["_source"]["content"],
+                "category": hit["_source"].get("category", "N/A"),
+                "uploaded_by": hit["_source"].get("uploaded_by", "N/A")
             }
             for hit in hits
         ]
         return {"result": response}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro na busca: {str(e)}")
+
+
+@document_router.get("/list")
+async def list_documents(user_access_level: int = 3):
+    """Lista todos os documentos que o usuário tem acesso"""
+    try:
+        es_query = {
+            "query": {
+                "range": {
+                    "access_level": {"lte": user_access_level}
+                }
+            },
+            "size": 1000
+        }
+        result = es.search(index="healthcom_docs", body=es_query)
+        hits = result["hits"]["hits"]
+        documents = [
+            {
+                "id": hit["_id"],
+                "filename": hit["_source"].get("filename", ""),
+                "content": hit["_source"].get("content", ""),
+                "category": hit["_source"].get("category", ""),
+                "access_level": hit["_source"].get("access_level", 0),
+                "uploaded_by": hit["_source"].get("uploaded_by", ""),
+                "data_upload": hit["_source"].get("data_upload", ""),
+            }
+            for hit in hits
+        ]
+        return {"documents": documents}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao listar documentos: {str(e)}")
+
+
+@document_router.get("/{doc_id}/markdown")
+async def get_document_markdown(doc_id: str):
+    """Retorna o conteúdo markdown de um documento"""
+    try:
+        result = es.get(index="healthcom_docs", id=doc_id)
+        if not result:
+            raise HTTPException(status_code=404, detail="Documento não encontrado")
+        
+        return {
+            "content": result["_source"].get("content", ""),
+            "filename": result["_source"].get("filename", "")
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao buscar markdown: {str(e)}")
 
 
 if __name__ == "__main__":

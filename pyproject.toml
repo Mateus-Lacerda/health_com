@@ -7,11 +7,11 @@ requires-python = ">=3.13"
 dependencies = [
     "coverage>=7.8.0",
     "crewai>=0.120.1",
-    "docling>=2.32.0",
     "elasticsearch==8.17.1",
     "fastapi>=0.115.9",
     "pydantic>=2.11.4",
     "pymongo>=4.13.0",
+    "pymupdf4llm>=0.2.9",
     "pytest>=8.3.5",
     "python-multipart>=0.0.20",
     "ruff>=0.11.10",
