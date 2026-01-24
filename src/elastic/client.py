@@ -52,14 +52,41 @@ class ElasticsearchConnection:
         self.es.indices.create(
             index=index_name,
             body={
+                "settings": {
+                    "number_of_shards": 1,
+                    "number_of_replicas": 0,
+                    "analysis": {
+                        "analyzer": {
+                            "content_analyzer": {
+                                "type": "standard",
+                                "stopwords": "_portuguese_"
+                            }
+                        }
+                    }
+                },
                 "mappings": {
                     "properties": {
-                        "filename": {"type": "text"},
-                        "content": {"type": "text"},
-                        "category": {"type": "keyword"},
-                        "access_level": {"type": "integer"},
-                        "uploaded_by": {"type": "keyword"},
-                        "data_upload": {"type": "date"},
+                        "filename": {
+                            "type": "text",
+                            "analyzer": "content_analyzer"
+                        },
+                        "content": {
+                            "type": "text",
+                            "analyzer": "content_analyzer",
+                            "index": True
+                        },
+                        "category": {
+                            "type": "keyword"
+                        },
+                        "access_level": {
+                            "type": "integer"
+                        },
+                        "uploaded_by": {
+                            "type": "keyword"
+                        },
+                        "data_upload": {
+                            "type": "date"
+                        }
                     }
                 }
             }

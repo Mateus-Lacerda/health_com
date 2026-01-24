@@ -11,24 +11,61 @@ from pydantic import BaseModel, Field
 
 BASE_API_URL = os.getenv("BASE_API_URL", "http://localhost:5000")
 
+# Dicionário para armazenar documentos encontrados na busca atual
+search_results = {
+    "documents": [],
+    "names": []
+}
 
-def make_search(access_level: str, category: str, query: str) -> dict:
+
+def make_search(access_level: str, category: str, query: str) -> str:
     """Função para criar a busca na API interna."""
+    global search_results
+    
     response = requests.get(
         f"{BASE_API_URL}/api/v1/document/search",
         params={"query": query, "category": category,
                 "access_level": access_level}
     )
+    
+    # Resetar resultados
+    search_results = {
+        "documents": [],
+        "names": []
+    }
+    
     if response.status_code == 200:
-        return response.json().get("result", [])
+        results = response.json().get("result", [])
+        
+        if not results:
+            return "Nenhum documento encontrado para esta busca."
+        
+        result_text = f"Encontrados {len(results)} documento(s) relevante(s):\n\n"
+        
+        for idx, doc in enumerate(results, 1):
+            doc_name = doc.get("filename", "Sem nome")
+            content = doc.get("content", "")[:300]  # Primeiros 300 caracteres
+            
+            # Armazenar documento
+            search_results["documents"].append(doc)
+            search_results["names"].append(doc_name)
+            
+            result_text += f"Documento {idx}: {doc_name}\n"
+            result_text += f"Categoria: {doc.get('category', 'N/A')}\n"
+            result_text += f"Resumo: {content}...\n\n"
+        
+        return result_text
     else:
-        return {"error": "Erro ao buscar informações."}
+        return "Erro ao buscar informações na base de dados."
 
 
 class SearchToolInput(BaseModel):
     """Esquema de entrada para o SearchTool."""
     query: str = Field(
-        ..., description="Termo de busca para consultar os documentos."
+        ..., description="""
+        Termo de busca para consultar os documentos.
+        O termo de busca é alguma palavra chave ou trecho que pode estar nos documentos alvo.
+        """
     )
 
 
@@ -39,7 +76,7 @@ class SearchTool(BaseTool):
     description: str = "Ferramenta para buscar informações nos documentos."
     args_schema: Type[BaseModel] = SearchToolInput
 
-    def _run(self, query: str) -> list[dict]:
+    def _run(self, query: str) -> str:  # type: ignore
         """Método para executar a busca na API interna."""
         pass
 

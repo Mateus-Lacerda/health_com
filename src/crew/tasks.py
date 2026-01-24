@@ -30,12 +30,13 @@ def create_conversational_task() -> Task:
     return Task(
         agent=create_conversational_agent(),
         description="Ler os trechos dos documentos encontrados e "
-        "apresentar de forma expositiva. IMPORTANTE: Ao final de cada "
-        "trecho citado, você deve colocar uma tag especial [FONTE: nome_do_documento] "
-        "para indicar de qual documento aquele trecho foi extraído. "
+        "apresentar de forma expositiva. "
+        "MUITO IMPORTANTE: Após cada informação importante citada, você DEVE adicionar "
+        "em parênteses o nome do documento. Exemplo: '...informação importante (Documento: nome_do_arquivo.pdf)'. "
+        "Faça isso para TODOS os trechos citados dos documentos. "
         "Esta é a pergunta feita: {query}",
         expected_output="Texto explicativo com os trechos dos "
-        "documentos encontrados, com indicação de fonte para cada trecho.",
+        "documentos encontrados, com a fonte claramente indicada após cada informação.",
     )
 
 

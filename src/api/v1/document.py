@@ -4,7 +4,7 @@ import os
 from datetime import datetime
 
 from bson.objectid import ObjectId
-from fastapi import File, Form, HTTPException, UploadFile
+from fastapi import File, Form, HTTPException, UploadFile, Query
 from fastapi.responses import StreamingResponse
 from fastapi.routing import APIRouter
 from pymupdf4llm import to_markdown
@@ -108,13 +108,15 @@ async def download_pdf(file_id: str, user_access_level: int):
 
 @document_router.get("/search")
 async def search_documents(
-    query: str, category: str | None = None, user_access_level: int = 3
+    query: str = Query(...),
+    category: str | None = Query(None),
+    access_level: int = Query(0)
 ):
     es_query = {
         "query": {
             "bool": {
                 "must": [{"match": {"content": query}}],
-                "filter": [{"range": {"access_level": {"lte": user_access_level}}}],
+                "filter": [{"range": {"access_level": {"lte": access_level}}}],
             }
         }
     }
@@ -140,13 +142,13 @@ async def search_documents(
 
 
 @document_router.get("/list")
-async def list_documents(user_access_level: int = 3):
+async def list_documents(access_level: int = Query(0)):
     """Lista todos os documentos que o usuário tem acesso"""
     try:
         es_query = {
             "query": {
                 "range": {
-                    "access_level": {"lte": user_access_level}
+                    "access_level": {"lte": access_level}
                 }
             },
             "size": 1000

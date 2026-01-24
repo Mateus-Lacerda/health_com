@@ -1,177 +1,305 @@
-"""Módulo para a página de chat com os agents"""
+"Módulo para a página de chat com os agents"
 
+import logging
 import re
 import sys
 import requests
+import os
 
 import streamlit as st
 
 from src.crew.crew import create_crew
 
-BASE_API_URL = st.session_state.get("BASE_API_URL", "http://localhost:5000")
+BASE_API_URL = os.getenv("BASE_API_URL", "http://localhost:5000")
+
+# Inicializar session state
+if "found_documents" not in st.session_state:
+    st.session_state.found_documents = []
 
 
 class StreamToExpander:
     def __init__(self, expander):
         self.expander = expander
-        self.buffer = []
         self.colors = ['red', 'green', 'blue', 'orange', 'purple', 'pink']
-        self.color_index = 0  # Initialize color index
+        self.color_index = 0
+        self.line_buffer = ""
+        self.full_log = ""
 
     def write(self, data):
-        # Filter out ANSI escape codes using a regular expression
-        cleaned_data = re.sub(r'\x1B\[[0-9;]*[mK]', '', data)
+        self.line_buffer += data
 
-        # Check if the data contains 'task' information
-        task_match_object = re.search(
-            r'\"task\"\s*:\s*\"(.*?)\"', cleaned_data, re.IGNORECASE)
-        task_match_input = re.search(
-            r'task\s*:\s*([^\n]*)', cleaned_data, re.IGNORECASE)
-        task_value = None
-        if task_match_object:
-            task_value = task_match_object.group(1)
+        if "\n" in self.line_buffer:
+            lines = self.line_buffer.split('\n')
+            # The last element is the partial line (or empty string if ends with \n)
+            self.line_buffer = lines.pop()
+
+            for line in lines:
+                self.process_line(line)
+
+            # Update the UI with the full log accumulated so far
+            self.expander.markdown(self.full_log, unsafe_allow_html=True)
+
+    def process_line(self, line):
+        # 1. Clean ANSI
+        cleaned_line = re.sub(r'\x1B\[[0-9;]*[mK]', '', line)
+
+        # 2. Detect Tasks (Toast)
+        task_match = re.search(r'"task"\s*:\s*"(.*?)"', cleaned_line, re.IGNORECASE)
+        task_match_input = re.search(r'task\s*:\s*([^\n]*)', cleaned_line, re.IGNORECASE)
+        if task_match:
+            st.toast(":robot_face: " + task_match.group(1))
         elif task_match_input:
-            task_value = task_match_input.group(1).strip()
+            st.toast(":robot_face: " + task_match_input.group(1).strip())
 
-        if task_value:
-            st.toast(":robot_face: " + task_value)
+        # 3. Detect Tool Calls (Toast + Highlight)
+        if "Action:" in cleaned_line:
+            match = re.search(r'Action\s*:\s*(.*)', cleaned_line, re.IGNORECASE)
+            if match:
+                tool = match.group(1).strip()
+                st.toast(f":hammer_and_wrench: Tool: {tool}")
+                cleaned_line = cleaned_line.replace(match.group(0), f":orange[**Action:** {tool}]")
 
-        # Check if the text contains the specified phrase and apply color
-        if "Entering new CrewAgentExecutor chain" in cleaned_data:
-            # Apply different color and switch color index
-            # Increment color index and wrap around if necessary
+        if "Action Input:" in cleaned_line:
+            match = re.search(r'Action Input\s*:\s*(.*)', cleaned_line, re.IGNORECASE)
+            if match:
+                val = match.group(1).strip()
+                cleaned_line = cleaned_line.replace(match.group(0), f":orange[**Action Input:** {val}]")
+
+        # 4. Coloring Agent Names and Phrases
+        if "Entering new CrewAgentExecutor chain" in cleaned_line:
             self.color_index = (self.color_index + 1) % len(self.colors)
+            cleaned_line = cleaned_line.replace(
+                "Entering new CrewAgentExecutor chain",
+                f":{self.colors[self.color_index]}[Entering new CrewAgentExecutor chain]"
+            )
 
-            cleaned_data = cleaned_data.replace("Entering new CrewAgentExecutor chain", f":{
-                                                self.colors[self.color_index]}[Entering new CrewAgentExecutor chain]")
+        agents = [
+            "Gerente de Projetos Sênior e Consultor de Saúde",
+            "Pesquisador Acadêmico PhD",
+            "Brigadeiro Médico da Aeronáutica",
+            "Apresentador de Televisão Aposentado"
+        ]
+        for agent in agents:
+            if agent in cleaned_line:
+                cleaned_line = cleaned_line.replace(
+                    agent,
+                    f":{self.colors[self.color_index]}[{agent}]"
+                )
 
-        if "Gerente de Projetos Sênior e Consultor de Saúde" in cleaned_data:
-            cleaned_data = cleaned_data.replace(
-                "Gerente de Projetos Sênior e Consultor de Saúde", f":{self.colors[self.color_index]}[Gerente de Projetos Sênior e Consultor de Saúde]")
-        if "Pesquisador Acadêmico PhD" in cleaned_data:
-            cleaned_data = cleaned_data.replace(
-                "Pesquisador Acadêmico PhD", f":{self.colors[self.color_index]}[Pesquisador Acadêmico PhD]")
-        if "Brigadeiro Médico da Aeronáutica" in cleaned_data:
-            cleaned_data = cleaned_data.replace(
-                "Brigadeiro Médico da Aeronáutica", f":{self.colors[self.color_index]}[Brigadeiro Médico da Aeronáutica]")
-        if "Apresentador de Televisão Aposentado" in cleaned_data:
-            cleaned_data = cleaned_data.replace(
-                "Apresentador de Televisão Aposentado", f":{self.colors[self.color_index]}[Apresentador de Televisão Aposentado]")
-        if "Finished chain." in cleaned_data:
-            cleaned_data = cleaned_data.replace(
-                "Finished chain.", f":{self.colors[self.color_index]}[Finished chain.]")
+        if "Finished chain." in cleaned_line:
+            cleaned_line = cleaned_line.replace(
+                "Finished chain.",
+                f":{self.colors[self.color_index]}[Finished chain.]"
+            )
 
-        self.buffer.append(cleaned_data)
-        if "\n" in data:
-            self.expander.markdown(''.join(self.buffer),
-                                   unsafe_allow_html=True)
-            self.buffer = []
+        # Append to full log with double space for markdown line break
+        self.full_log += cleaned_line + "  \n"
 
     def flush(self):
-        # Flush any remaining data in the buffer
-        if self.buffer:
-            self.expander.markdown(''.join(self.buffer),
-                                   unsafe_allow_html=True)
-            self.buffer = []
+        if self.line_buffer:
+            self.process_line(self.line_buffer)
+            self.line_buffer = ""
+            self.expander.markdown(self.full_log, unsafe_allow_html=True)
 
 
-def extract_and_display_documents(response_text):
+class StreamToLogger(logging.Handler):
+    """
+    Custom logging handler that sends logs to the StreamToExpander.
+    """
+    def __init__(self, stream_expander):
+        super().__init__()
+        self.stream_expander = stream_expander
+
+    def emit(self, record):
+        try:
+            msg = self.format(record)
+            self.stream_expander.write(msg + "\n")
+        except Exception:
+            self.handleError(record)
+
+
+def extract_and_display_documents(response_text, search_docs):
     """
     Extrai os documentos citados na resposta e exibe um indicador visual.
-    Procura por tags [FONTE: nome_do_documento]
+    Utiliza os documentos encontrados na busca.
     """
-    import os
-    
     # Converter CrewOutput para string se necessário
     if not isinstance(response_text, str):
         response_text = str(response_text)
     
-    # Extrair todas as referências de fontes
-    fonte_pattern = r'\[FONTE:\s*([^\]]+)\]'
-    fontes = re.findall(fonte_pattern, response_text, re.IGNORECASE)
-    
-    if not fontes:
+    # Se houver documentos da busca, usá-los
+    if not search_docs:
+        st.info("Nenhum documento foi consultado nesta busca.")
         return
     
-    # Remover duplicatas mantendo ordem
-    fontes_unicas = []
-    seen = set()
-    for fonte in fontes:
-        fonte_limpa = fonte.strip()
-        if fonte_limpa not in seen:
-            fontes_unicas.append(fonte_limpa)
-            seen.add(fonte_limpa)
-    
-    st.subheader("📚 Documentos Utilizados", divider="orange")
-    
-    # Buscar detalhes dos documentos
-    BASE_API_URL = os.getenv("BASE_API_URL", "http://localhost:5000")
+    st.subheader("Documentos Utilizados", divider="orange")
     
     try:
         # Buscar lista de todos os documentos
         access_level = st.session_state.get("access_level", 0)
         response = requests.get(
             f"{BASE_API_URL}/api/v1/document/list",
-            params={"access_level": access_level}
+            params={"access_level": access_level},
+            timeout=10
         )
         
         if response.status_code == 200:
             todos_docs = response.json().get("documents", [])
             
-            # Criar mapa nome -> documento
-            docs_map = {doc.get("filename", ""): doc for doc in todos_docs}
+            # Exibir documentos encontrados na busca
+            cols = st.columns(min(3, len(search_docs)))
             
-            # Exibir documentos encontrados
-            cols = st.columns(min(3, len(fontes_unicas)))
-            
-            for idx, fonte in enumerate(fontes_unicas):
+            for idx, doc in enumerate(search_docs):
                 col = cols[idx % len(cols)]
+                doc_id = str(doc.get("id", ""))
                 
-                if fonte in docs_map:
-                    doc = docs_map[fonte]
-                    with col:
-                        with st.container(border=True):
-                            st.markdown(f"**📄 {doc.get('filename', fonte)}**")
-                            st.caption(f"Categoria: {doc.get('category', 'N/A')}")
-                            st.caption(f"Enviado por: {doc.get('uploaded_by', 'N/A')}")
-                            
-                            # Botão para visualizar
-                            if st.button(f"👁️ Ver", key=f"view_doc_{doc.get('id')}"):
-                                st.session_state.selected_doc = doc.get("id")
-                                st.session_state.view_mode = "markdown"
-                else:
-                    with col:
-                        with st.container(border=True):
-                            st.markdown(f"**📄 {fonte}**")
-                            st.caption("Documento não encontrado no sistema")
-    except Exception as e:
+                with col:
+                    with st.container(border=True):
+                        st.markdown(f"**{doc.get('filename', 'Sem nome')}**")
+                        st.caption(f"Categoria: {doc.get('category', 'N/A')}")
+                        st.caption(f"Enviado por: {doc.get('uploaded_by', 'N/A')}")
+                        
+                        if st.button("Ver", key=f"view_doc_{doc_id}"):
+                            st.session_state.selected_doc = doc_id
+                            st.session_state.view_mode = "markdown"
+                            st.rerun()
+    except requests.RequestException as e:
         st.warning(f"Erro ao exibir documentos: {str(e)}")
 
 
 def agent_chat(access_level, category, query):
-    """Função para o chat com os agents"""
-    st.subheader("Chat com os Agents")
-
-    with st.status("🤖 **Os agentes estão trabalhando...**", state="running", expanded=True) as status:
-        with st.container(height=500, border=False):
-            sys.stdout = StreamToExpander(st)
+    """Função para o chat com os agents com interface visual detalhada"""
+    st.subheader("Orquestração de Agentes")
+    
+    # Timeline visual
+    timeline_col1, timeline_col2, timeline_col3, timeline_col4 = st.columns(4)
+    
+    with timeline_col1:
+        manager_container = st.empty()
+    with timeline_col2:
+        researcher_container = st.empty()
+    with timeline_col3:
+        conversational_container = st.empty()
+    with timeline_col4:
+        expert_container = st.empty()
+    
+    # Containers para logs detalhados
+    logs_expander = st.expander("Logs de Execução", expanded=False)
+    
+    # Seção de detalhes dos documentos encontrados
+    documents_expander = st.expander("Documentos Encontrados", expanded=False)
+    
+    # Atualizar timeline inicial
+    with manager_container.container(border=True):
+        st.markdown("### Gerente\n**Status:** Iniciando...")
+    
+    with researcher_container.container(border=True):
+        st.markdown("### Pesquisador\n**Status:** Aguardando...")
+    
+    with conversational_container.container(border=True):
+        st.markdown("### Apresentador\n**Status:** Aguardando...")
+    
+    with expert_container.container(border=True):
+        st.markdown("### Perito\n**Status:** Aguardando...")
+    
+    # Executar crew
+    with st.status("Agentes em execução...", state="running", expanded=True) as status_box:
+        # Logs
+        with logs_expander:
+            logs_container = st.empty()
+        
+        # Setup Capture
+        stream_expander = StreamToExpander(logs_container)
+        
+        # 1. Capture stdout
+        old_stdout = sys.stdout
+        sys.stdout = stream_expander
+        
+        # 2. Capture logging
+        logger = logging.getLogger()
+        old_level = logger.getEffectiveLevel()
+        logger.setLevel(logging.INFO)
+        
+        log_handler = StreamToLogger(stream_expander)
+        formatter = logging.Formatter('%(message)s')
+        log_handler.setFormatter(formatter)
+        logger.addHandler(log_handler)
+        
+        try:
+            # Atualizar timeline - Gerente
+            with manager_container.container(border=True):
+                st.markdown("### Gerente\n**Status:** Coordenando agentes...")
+            
+            # Atualizar timeline - Pesquisador
+            with researcher_container.container(border=True):
+                st.markdown("### Pesquisador\n**Status:** Buscando documentos...")
+            
             health_com_crew = create_crew(
                 access_level=access_level,
                 category=category
             )
-            output_placeholder = st.empty()
+            
             result = health_com_crew.kickoff(
                 inputs={"query": query}
             )
-            # Converter CrewOutput para string
+            
+            # Atualizar timeline - Conversational
+            with conversational_container.container(border=True):
+                st.markdown("### Apresentador\n**Status:** Estruturando resposta...")
+            
+            # Atualizar timeline - Expert
+            with expert_container.container(border=True):
+                st.markdown("### Perito\n**Status:** Validando e recomendando...")
+            
+            # Resultado
             result_str = str(result)
-            output_placeholder.markdown(result_str)
-
-        status.update(label="✅ **Os agentes terminaram!**",
-                      state="complete", expanded=False)
-
-    st.subheader("Aqui está sua resposta", anchor=False, divider="rainbow")
+        finally:
+            sys.stdout.flush()
+            sys.stdout = old_stdout
+            
+            # Remove handler and restore level
+            logger.removeHandler(log_handler)
+            logger.setLevel(old_level)
+        
+        status_box.update(label="Agentes finalizados!", state="complete", expanded=False)
+    
+    # Timeline final
+    with manager_container.container(border=True):
+        st.markdown("### Gerente\n**Status:** Coordenação completa")
+    
+    with researcher_container.container(border=True):
+        st.markdown("### Pesquisador\n**Status:** Busca concluída")
+    
+    with conversational_container.container(border=True):
+        st.markdown("### Apresentador\n**Status:** Resposta estruturada")
+    
+    with expert_container.container(border=True):
+        st.markdown("### Perito\n**Status:** Validação completa")
+    
+    # Sincronizar documentos encontrados da busca
+    found_docs_list = []
+    try:
+        from src.crew.tools import search_results as sr
+        if sr and sr.get("documents"):
+            found_docs_list = sr["documents"]
+            st.session_state.found_documents = found_docs_list
+    except (ImportError, AttributeError) as e:
+        st.warning(f"Não foi possível recuperar documentos da busca: {str(e)}")
+    
+    # Mostrar documentos encontrados
+    with documents_expander:
+        if found_docs_list:
+            st.success(f"**{len(found_docs_list)} documentos encontrados:**")
+            for idx, doc in enumerate(found_docs_list, 1):
+                filename = doc.get("filename", "Sem nome")
+                st.write(f"{idx}. {filename}")
+        else:
+            st.info("Nenhum documento foi consultado nesta busca.")
+    
+    # Resposta Final
+    st.subheader("Resposta Final", divider="rainbow")
     st.markdown(result_str)
     
-    # Extrair e exibir documentos usados
-    extract_and_display_documents(result_str)
+    # Seção de documentos utilizados
+    st.divider()
+    extract_and_display_documents(result_str, found_docs_list)

@@ -108,6 +108,9 @@ flowchart TB
 - **Controle de Acesso**: Resultados filtrados conforme o nível de acesso do usuário.
 - **Multiagentes**: Respostas elaboradas por agentes especializados (gerente, pesquisador, perito, apresentador).
 - **Interface Amigável**: Uso de Streamlit para facilitar a interação.
+- **Timeline Visual**: Acompanhe em tempo real o progresso de cada agente
+- **Rastreamento de Documentos**: Veja exatamente quais PDFs foram consultados
+- **Cards Informativos**: Visualize detalhes dos documentos com links diretos
 
 ---
 
@@ -130,7 +133,7 @@ O sistema utiliza CrewAI para coordenar diferentes agentes, cada um com um papel
 ```mermaid
 graph TD
     User["Usuário<br/>(Faz uma pergunta)"]
-    Manager["Gerente de Projetos<br/>Kévio"]
+    Manager["Gerente<br/>Coordenador"]
     Researcher["Pesquisador PhD<br/>(Busca documentos)"]
     Conversational["Apresentador<br/>Manoel Gomes"]
     Expert["Brigadeiro Médico<br/>Alessandro Silva"]
@@ -140,15 +143,22 @@ graph TD
     
     User -->|Query| Manager
     Manager -->|Orquestra| Researcher
-    Manager -->|Orquestra| Conversational
-    Manager -->|Orquestra| Expert
+    Manager -->|Handoff| Conversational
+    Manager -->|Handoff| Expert
     
     Researcher -->|Search| ES
     ES -->|Retorna docs| Conversational
     Conversational -->|Apresenta| Expert
     Expert -->|Valida e recomenda| Response
-    Response -->|Exibe documentos| User
-
+    Response -->|Exibe com cards| User
+    
+    style Manager fill:#4A90E2,stroke:#2E5C8A,stroke-width:3px
+    style Researcher fill:#7ED321,stroke:#5AA315,stroke-width:3px
+    style Conversational fill:#F5A623,stroke:#D68910,stroke-width:3px
+    style Expert fill:#BD10E0,stroke:#9000B0,stroke-width:3px
+    style User fill:#50E3C2,stroke:#2DB899,stroke-width:2px
+    style Response fill:#50E3C2,stroke:#2DB899,stroke-width:2px
+    style ES fill:#B8E986,stroke:#8FB357,stroke-width:2px
 ```
 
 ### Detalhes dos Agentes
@@ -160,20 +170,57 @@ graph TD
 | **Apresentador** (Manoel Gomes) | Comunicação | Lê os trechos dos documentos e apresenta de forma clara e expositiva, citando as fontes |
 | **Perito** (Brigadeiro) | Validação | Responde dúvidas específicas, valida informações e recomenda quando necessário consultar especialistas |
 
-### Fluxo de Execução
+### Fluxo de Execução Detalhado
 
 1. **Input**: Usuário faz uma pergunta via Streamlit
+   - Interface mostra timeline de execução com 4 status visuais
+   
 2. **Manager**: Recebe a pergunta e coordena os agentes (Processo Hierárquico)
+   - Status: 🎯 Coordenando agentes...
+   - Resultado: ✅ Coordenação completa
+   
 3. **Researcher**: Busca documentos relevantes no Elasticsearch
-4. **Conversational**: Extrai trechos e apresenta de forma clara (com tags `[FONTE: documento]`)
-5. **Expert**: Valida a resposta e adiciona recomendações de segurança
-6. **Output**: Resposta final com indicador visual dos documentos utilizados
+   - Status: 🔬 Buscando documentos...
+   - Output: Lista de documentos encontrados
+   - Resultado: ✅ Busca concluída
+   
+4. **Conversational**: Extrai trechos e apresenta de forma clara
+   - Status: 📺 Estruturando resposta...
+   - Formato: Cada informação é citada com `(Documento: nome_do_arquivo.pdf)`
+   - Resultado: ✅ Resposta estruturada
+   
+5. **Expert**: Valida a resposta e adiciona recomendações
+   - Status: 🎖️ Validando informações...
+   - Output: Recomendações de segurança e próximos passos
+   - Resultado: ✅ Validação completa
+   
+6. **Output**: Resposta final com:
+   - Texto estruturado e bem formatado
+   - Cards visuais dos documentos utilizados
+   - Links para visualizar documentos completos
+
+### Interface Visual
+
+- **Timeline em Cards**: Mostra o progresso de cada agente em tempo real
+- **Logs de Execução**: Expander com detalhes técnicos (colapsável)
+- **Documentos Encontrados**: Expander listando todos os PDFs consultados
+- **Resposta Final**: Formatada e com indicadores visuais
+- **Cards de Documentos**: Mostram filename, categoria e botão de visualização
 
 ---
 
 ## Embeddings e Busca
 
-O conteúdo dos PDFs é convertido para texto e indexado no Elasticsearch, permitindo buscas eficientes e relevantes.
+O conteúdo dos PDFs é convertido para texto e indexado no Elasticsearch com as seguintes características:
+
+- **Análise de Texto**: Utiliza analyzer padrão com remoção de stopwords em português
+- **TF-IDF (Term Frequency-Inverse Document Frequency)**: Algoritmo padrão do Elasticsearch para ranqueamento relevante
+  - TF: Frequência do termo no documento
+  - IDF: Raridade do termo na coleção (documentos que contêm termos raros têm maior peso)
+- **Índice Invertido**: Permite buscas eficientes e rápidas
+- **Filtros de Acesso**: Resultados filtrados conforme o nível de acesso do usuário
+
+Isso permite buscas eficientes, relevantes e que priorizam documentos mais específicos para cada query.
 
 ---
 
@@ -182,6 +229,8 @@ O conteúdo dos PDFs é convertido para texto e indexado no Elasticsearch, permi
 1. Faça upload de um PDF via interface.
 2. Realize uma busca textual.
 3. Veja a resposta dos agentes na interface Streamlit.
+
+📖 **Para um exemplo completo e detalhado, consulte [USAGE_EXAMPLE.md](USAGE_EXAMPLE.md)**
 
 ---
 
@@ -208,12 +257,29 @@ O MVP permite:
 
 Por se tratar de um MVP, pode ser que nenhuma das linhas de código que existem atualmente estejam em um possível estado de produção.
 O foco foi na construção de um protótipo funcional, e não necessariamente em um código escalável ou otimizado.
-Seriam necessárias diversas melhorias como:
-- Implementação de um sistema de permissões mais robusto.
-- Possibilidade de ver os documentos usados para gerar as respostas, com a parte exata onde foi encontrada a informação.
-- Jobs assíncronos para processamento de documentos.
-- Interface com front-end de produção (Pode ser até com FastAPI mesmo).
-- Eu particularmente não usaria frameworks de orquestração de agentes para produção.
+
+### ✅ Melhorias Já Implementadas
+- ✅ Indicadores visuais dos documentos usados para gerar as respostas
+- ✅ Timeline em tempo real mostrando o progresso de cada agente
+- ✅ Cards com informações dos documentos encontrados
+- ✅ Logs de execução detalhados (colapsível)
+- ✅ Citação de fontes em cada resposta
+
+### 📋 Melhorias Futuras
+- Implementação de um sistema de permissões mais robusto
+- Destacar a seção exata do documento onde a informação foi encontrada
+- Jobs assíncronos para processamento de documentos
+- Interface com front-end de produção (pode ser até com FastAPI mesmo)
+- Cache de buscas frequentes
+- Histórico de conversas e análise de patterns
+- Integração com modelos LLM mais avançados
+- Sistema de feedback dos usuários para melhorar respostas
+
+### ⚠️ Considerações Técnicas
+- Eu particularmente não usaria frameworks de orquestração de agentes para produção
+- Considerar uma arquitetura de microserviços para melhor escalabilidade
+- Implementar rate limiting e quotas por usuário
+- Adicionar monitoramento e alertas para detecção de anomalias
 
 ---
 

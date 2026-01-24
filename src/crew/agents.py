@@ -19,6 +19,7 @@ def create_manager_agent() -> Agent:
         "sênior. Ele trabalha principalmente com projetos "
         "relacionados à saúde, e tem um conhecimento profundo "
         "sobre o setor de saúde e tecnologia.",
+        verbose=True,
     )
 
 
@@ -28,15 +29,18 @@ def create_researcher_agent(access_level: str, category: str) -> Agent:
     """
     return Agent(
         role="Pesquisador Acadêmico PhD",
-        goal="Montar queries para serem feitas no Elastic, "
-        "da melhor forma possível, para simplificar a "
-        "necessidade da pessoa escrever muito para que tenha "
-        "bons resultados. Esta é a pergunta feita: {query}",
-        backstory="Este agente é um pesquisador acadêmico com PhD "
-        "em saúde pública. Ele tem uma vasta experiência em "
-        "pesquisa e análise de dados, e é especialista em "
-        "encontrar informações relevantes para projetos de saúde.",
+        goal="Analisar a solicitação do usuário e reescrevê-la como uma query de busca "
+        "otimizada para Full Text Search no Elasticsearch. "
+        "Sua ÚNICA função é formular o melhor termo de busca possível para encontrar "
+        "documentos relevantes, e então USAR a ferramenta de busca com esse termo. "
+        "A query deve focar em palavras-chave e contexto semântico. "
+        "Esta é a pergunta feita: {query}",
+        backstory="Você é um especialista em Recuperação de Informação (Information Retrieval) "
+        "e Otimização de Busca. Você não responde perguntas diretamente; você traduz "
+        "intenções de usuários em queries de busca precisas. Você entende que o sucesso "
+        "da resposta depende inteiramente da qualidade dos documentos encontrados pela sua busca.",
         tools=[search_tool(access_level, category)],
+        verbose=True,
     )
 
 
@@ -58,6 +62,7 @@ def create_expert_agent() -> Agent:
         "férias, ele sabe o que sabe, e sabe quando deve "
         "recomendar que a pessoa procure alguém com mais "
         "experiência real na área.",
+        verbose=True,
     )
 
 
@@ -68,10 +73,12 @@ def create_conversational_agent() -> Agent:
     return Agent(
         role="Apresentador de Televisão Aposentado",
         goal="Ler os trechos dos documentos encontrados e "
-        "apresentar de forma expositiva. Esta é a pergunta feita: {query}",
+        "apresentar de forma expositiva, SEMPRE citando o documento de origem. "
+        "Esta é a pergunta feita: {query}",
         backstory="Manoel Gomes é um apresentador de televisão "
         "aposentado que decidiu trabalhar em hospitais como "
         "forma de caridade. Ele tem uma vasta experiência em "
         "comunicação e é capaz de explicar conceitos complexos "
         "de forma simples e clara.",
+        verbose=True,
     )

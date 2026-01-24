@@ -72,7 +72,7 @@ def view_documents():
             st.write(f"**Enviado por:** {selected_doc.get('uploaded_by', 'N/A')}")
             st.write(f"**Data:** {selected_doc.get('data_upload', 'N/A')}")
             
-            if st.button("← Voltar à lista"):
+            if st.button("← Voltar à lista", key="btn_back_list"):
                 st.session_state.selected_doc = None
                 st.session_state.view_mode = None
                 st.rerun()
@@ -82,10 +82,10 @@ def view_documents():
             # Opções de visualização
             col1, col2 = st.columns(2)
             with col1:
-                if st.button("📄 Ver Markdown", use_container_width=True):
+                if st.button("📄 Ver Markdown", use_container_width=True, key=f"btn_md_{st.session_state.selected_doc}"):
                     st.session_state.view_mode = "markdown"
             with col2:
-                if st.button("📥 Baixar PDF", use_container_width=True):
+                if st.button("📥 Baixar PDF", use_container_width=True, key=f"btn_pdf_mode_{st.session_state.selected_doc}"):
                     st.session_state.view_mode = "pdf"
             
             st.divider()
@@ -101,7 +101,7 @@ def view_documents():
                     # Botão de copiar
                     col1, col2 = st.columns([4, 1])
                     with col2:
-                        if st.button("📋 Copiar", use_container_width=True):
+                        if st.button("📋 Copiar", use_container_width=True, key=f"btn_copy_{st.session_state.selected_doc}"):
                             st.success("Texto copiado para a área de transferência!")
                 else:
                     st.error("Não foi possível carregar o conteúdo.")
@@ -110,7 +110,7 @@ def view_documents():
                 st.write("### Download PDF")
                 st.info("Clique no botão abaixo para baixar o arquivo PDF original.")
                 
-                if st.button("📥 Baixar PDF", use_container_width=True):
+                if st.button("📥 Baixar PDF", use_container_width=True, key=f"btn_download_pdf_{st.session_state.selected_doc}"):
                     try:
                         response = requests.get(
                             f"{BASE_API_URL}/api/v1/document/download/{st.session_state.selected_doc}",
@@ -122,7 +122,8 @@ def view_documents():
                                 data=response.content,
                                 file_name=selected_doc.get('filename', 'documento.pdf'),
                                 mime="application/pdf",
-                                use_container_width=True
+                                use_container_width=True,
+                                key=f"btn_actual_download_{st.session_state.selected_doc}"
                             )
                         else:
                             st.error("Erro ao baixar o arquivo.")
@@ -152,10 +153,10 @@ def view_documents():
         # Opções de visualização
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("📄 Ver Markdown", use_container_width=True):
+            if st.button("📄 Ver Markdown", use_container_width=True, key=f"list_md_{selected_doc_id}"):
                 st.session_state.view_mode = "markdown"
         with col2:
-            if st.button("📥 Baixar PDF", use_container_width=True):
+            if st.button("📥 Baixar PDF", use_container_width=True, key=f"list_pdf_{selected_doc_id}"):
                 st.session_state.view_mode = "pdf"
         
         st.divider()
@@ -171,7 +172,7 @@ def view_documents():
                 # Botão de copiar
                 col1, col2 = st.columns([4, 1])
                 with col2:
-                    if st.button("📋 Copiar", use_container_width=True):
+                    if st.button("📋 Copiar", use_container_width=True, key=f"list_copy_{selected_doc_id}"):
                         st.success("Texto copiado para a área de transferência!")
             else:
                 st.error("Não foi possível carregar o conteúdo.")
@@ -180,7 +181,7 @@ def view_documents():
             st.write("### Download PDF")
             st.info("Clique no botão abaixo para baixar o arquivo PDF original.")
             
-            if st.button("📥 Baixar PDF", use_container_width=True):
+            if st.button("📥 Baixar PDF", use_container_width=True, key=f"list_download_pdf_{selected_doc_id}"):
                 try:
                     response = requests.get(
                         f"{BASE_API_URL}/api/v1/document/download/{selected_doc_id}",
@@ -192,7 +193,8 @@ def view_documents():
                             data=response.content,
                             file_name=selected_doc['filename'],
                             mime="application/pdf",
-                            use_container_width=True
+                            use_container_width=True,
+                            key=f"list_actual_download_{selected_doc_id}"
                         )
                     else:
                         st.error("Erro ao baixar o arquivo.")
